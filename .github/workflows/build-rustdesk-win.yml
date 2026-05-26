@@ -102,6 +102,32 @@ jobs:
         shell: pwsh
         run: |
           choco install nasm --version $env:NASM_VERSION -y --no-progress
+
+          $nasmCommand = Get-Command nasm -ErrorAction SilentlyContinue
+          if (-not $nasmCommand) {
+            $candidatePaths = @(
+              (Join-Path $env:ProgramFiles 'NASM'),
+              (Join-Path ${env:ProgramFiles(x86)} 'NASM'),
+              (Join-Path $env:ChocolateyInstall 'bin')
+            ) | Where-Object { $_ -and (Test-Path $_) }
+
+            foreach ($candidate in $candidatePaths) {
+              $env:PATH = "$candidate;$env:PATH"
+              $nasmCommand = Get-Command nasm -ErrorAction SilentlyContinue
+              if ($nasmCommand) {
+                break
+              }
+            }
+          }
+
+          if (-not $nasmCommand) {
+            throw 'NASM was installed but nasm.exe was not found in PATH.'
+          }
+
+          $nasmDir = Split-Path -Parent $nasmCommand.Source
+          $env:PATH = "$nasmDir;$env:PATH"
+          $nasmDir >> $env:GITHUB_PATH
+          "NASM_EXE=$($nasmCommand.Source)" >> $env:GITHUB_ENV
           nasm -v
 
       - name: Install Strawberry Perl
@@ -121,11 +147,31 @@ jobs:
           & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat" -disableMetrics
           Pop-Location
 
+      - name: Show vcpkg toolchain info
+        shell: pwsh
+        run: |
+          & "$env:VCPKG_ROOT\vcpkg.exe" version
+          Write-Host "Pinned vcpkg commit: $env:VCPKG_COMMIT_ID"
+          nasm -v
+
       - name: Install vcpkg dependencies
         shell: pwsh
         working-directory: rustdesk
         run: |
-          & "$env:VCPKG_ROOT\vcpkg.exe" install --triplet $env:VCPKG_DEFAULT_TRIPLET --x-install-root="$env:VCPKG_ROOT\installed"
+          $vcpkg = "$env:VCPKG_ROOT\vcpkg.exe"
+          & $vcpkg install --triplet $env:VCPKG_DEFAULT_TRIPLET --x-install-root="$env:VCPKG_ROOT\installed"
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "==> vcpkg install failed; dumping recent build logs"
+            Get-ChildItem "$env:VCPKG_ROOT\buildtrees" -Recurse -Filter *.log -ErrorAction SilentlyContinue |
+              Sort-Object LastWriteTime -Descending |
+              Select-Object -First 10 |
+              ForEach-Object {
+                Write-Host "----- $($_.FullName) -----"
+                Get-Content $_.FullName -Tail 80 -ErrorAction SilentlyContinue
+              }
+            exit $LASTEXITCODE
+          }
 
       - name: Flutter doctor
         shell: pwsh
