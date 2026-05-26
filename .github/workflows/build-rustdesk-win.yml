@@ -150,6 +150,7 @@ jobs:
           python --version
           git --version
           clang --version
+          nasm -v
 
       - name: Run build script
         shell: pwsh
