@@ -55,3 +55,4 @@
 
 - 当前方案兼容 RustDesk 开源版常规构建流程，不依赖 Pro 的 custom client generator
 - 如果未设置上述任何自建服务器 secret，工作流仍会正常构建客户端，只是不生成自建服务器安装脚本
+- Windows runner 上的 NASM 和 vcpkg 不能盲目跟随最新版本；本仓库固定 NASM 2.16.03 和 RustDesk 上游 CI 使用的 vcpkg commit，以避免 `aom:x64-windows-static` 在新工具链上构建失败

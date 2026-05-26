@@ -26,6 +26,8 @@ env:
   RUST_VERSION: '1.75'
   FLUTTER_VERSION: '3.24.5'
   LLVM_VERSION: '15.0.6'
+  NASM_VERSION: '2.16.03'
+  VCPKG_COMMIT_ID: '120deac3062162151622ca4860575a33844ba10b'
   VCPKG_DEFAULT_TRIPLET: 'x64-windows-static'
   VCPKG_DEFAULT_HOST_TRIPLET: 'x64-windows-static'
 
@@ -99,7 +101,8 @@ jobs:
       - name: Install NASM
         shell: pwsh
         run: |
-          choco install nasm -y --no-progress
+          choco install nasm --version $env:NASM_VERSION -y --no-progress
+          nasm -v
 
       - name: Install Strawberry Perl
         shell: pwsh
@@ -112,7 +115,11 @@ jobs:
           if (-not (Test-Path $env:VCPKG_ROOT)) {
             git clone https://github.com/microsoft/vcpkg $env:VCPKG_ROOT
           }
+          Push-Location $env:VCPKG_ROOT
+          git fetch --depth 1 origin $env:VCPKG_COMMIT_ID
+          git reset --hard $env:VCPKG_COMMIT_ID
           & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat" -disableMetrics
+          Pop-Location
 
       - name: Install vcpkg dependencies
         shell: pwsh
@@ -143,6 +150,7 @@ jobs:
           python --version
           git --version
           clang --version
+          nasm -v
 
       - name: Run build script
         shell: pwsh
