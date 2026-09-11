@@ -183,7 +183,13 @@ jobs:
         shell: pwsh
         run: |
           flutter precache --windows
-          $engineRoot = "C:/hostedtoolcache/windows/flutter/stable-${{ env.FLUTTER_VERSION }}-x64/bin/cache/artifacts/engine/windows-x64-release"
+          $flutterRoot = $env:FLUTTER_ROOT
+          if ([string]::IsNullOrWhiteSpace($flutterRoot)) {
+            $flutterCommand = Get-Command flutter -ErrorAction Stop
+            $flutterRoot = Split-Path -Parent (Split-Path -Parent $flutterCommand.Source)
+          }
+          $engineRoot = Join-Path $flutterRoot 'bin\cache\artifacts\engine\windows-x64-release'
+          New-Item -ItemType Directory -Force -Path $engineRoot | Out-Null
           Invoke-WebRequest -Uri https://github.com/rustdesk/engine/releases/download/main/windows-x64-release.zip -OutFile windows-x64-release.zip
           Expand-Archive -Path windows-x64-release.zip -DestinationPath windows-x64-release
           Copy-Item windows-x64-release\* $engineRoot -Recurse -Force
