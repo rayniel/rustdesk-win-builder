@@ -303,10 +303,13 @@ jobs:
           $flutterRoot = $env:FLUTTER_ROOT
           if ([string]::IsNullOrWhiteSpace($flutterRoot)) {
             $flutterCommand = Get-Command flutter -ErrorAction Stop
-            $flutterRoot = Split-Path -Parent (Split-Path -Parent $flutterCommand.Source)
+            $flutterRoot = Split-Path -Parent $flutterCommand.Source
           }
           $engineRoot = Join-Path $flutterRoot 'bin\cache\artifacts\engine\windows-x64-release'
           New-Item -ItemType Directory -Force -Path $engineRoot | Out-Null
+          if (-not (Test-Path $engineRoot -PathType Container)) {
+            throw "Flutter Windows engine directory was not created: $engineRoot"
+          }
           Invoke-WebRequest -Uri https://github.com/rustdesk/engine/releases/download/main/windows-x64-release.zip -OutFile windows-x64-release.zip
           Expand-Archive -Path windows-x64-release.zip -DestinationPath windows-x64-release
           Copy-Item windows-x64-release\* $engineRoot -Recurse -Force
@@ -319,7 +322,7 @@ jobs:
             $flutterRoot = $env:FLUTTER_ROOT
             if ([string]::IsNullOrWhiteSpace($flutterRoot)) {
               $flutterCommand = Get-Command flutter -ErrorAction Stop
-              $flutterRoot = Split-Path -Parent (Split-Path -Parent $flutterCommand.Source)
+              $flutterRoot = Split-Path -Parent $flutterCommand.Source
             }
             git -C $flutterRoot apply --check $patch
             git -C $flutterRoot apply $patch
