@@ -32,7 +32,106 @@ env:
   VCPKG_DEFAULT_HOST_TRIPLET: 'x64-windows-static'
 
 jobs:
+  resolve-rustdesk-ref:
+    runs-on: ubuntu-22.04
+    outputs:
+      ref: ${{ steps.ref.outputs.ref }}
+      artifact_suffix: ${{ steps.ref.outputs.artifact_suffix }}
+
+    steps:
+      - name: Resolve RustDesk ref
+        id: ref
+        shell: bash
+        run: |
+          ref="${{ github.event.inputs.rustdesk_ref }}"
+          ref="${ref:-master}"
+          artifact_suffix="$(printf '%s' "$ref" | tr '/\:*?"<>|' '-')"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "artifact_suffix=$artifact_suffix" >> "$GITHUB_OUTPUT"
+
+  generate-bridge:
+    needs: resolve-rustdesk-ref
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout RustDesk source
+        uses: actions/checkout@v4
+        with:
+          repository: rustdesk/rustdesk
+          ref: ${{ needs.resolve-rustdesk-ref.outputs.ref }}
+          submodules: recursive
+
+      - name: Install bridge prerequisites
+        shell: bash
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            clang \
+            cmake \
+            gcc \
+            g++ \
+            libclang-dev \
+            libgtk-3-dev \
+            llvm-dev \
+            nasm \
+            ninja-build \
+            pkg-config
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Setup bridge Flutter
+        uses: subosito/flutter-action@v2.23.0
+        with:
+          channel: stable
+          flutter-version: '3.22.3'
+
+      - name: Generate Flutter Rust Bridge files
+        shell: bash
+        run: |
+          cargo install cargo-expand --version 1.0.95 --locked
+          cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
+          sed -i 's/extended_text: 14.0.0/extended_text: 13.0.0/g' flutter/pubspec.yaml
+          pushd flutter
+          flutter pub get
+          popd
+          "${HOME}/.cargo/bin/flutter_rust_bridge_codegen" \
+            --rust-input ./src/flutter_ffi.rs \
+            --dart-output ./flutter/lib/generated_bridge.dart \
+            --c-output ./flutter/macos/Runner/bridge_generated.h
+          cp ./flutter/macos/Runner/bridge_generated.h ./flutter/ios/Runner/bridge_generated.h
+
+      - name: Verify generated bridge files
+        shell: bash
+        run: |
+          for file in \
+            src/bridge_generated.rs \
+            src/bridge_generated.io.rs \
+            flutter/lib/generated_bridge.dart \
+            flutter/lib/generated_bridge.freezed.dart; do
+            test -s "$file" || { echo "::error::Missing generated bridge file: $file"; exit 1; }
+          done
+
+      - name: Upload generated bridge files
+        uses: actions/upload-artifact@v4
+        with:
+          name: rustdesk-bridge-${{ needs.resolve-rustdesk-ref.outputs.artifact_suffix }}
+          path: |
+            src/bridge_generated.rs
+            src/bridge_generated.io.rs
+            flutter/lib/generated_bridge.dart
+            flutter/lib/generated_bridge.freezed.dart
+            flutter/macos/Runner/bridge_generated.h
+            flutter/ios/Runner/bridge_generated.h
+
   build-windows:
+    needs:
+      - resolve-rustdesk-ref
+      - generate-bridge
     runs-on: windows-2022
     timeout-minutes: 180
 
@@ -40,23 +139,34 @@ jobs:
       - name: Checkout builder repo
         uses: actions/checkout@v4
 
-      - name: Resolve RustDesk ref
-        id: ref
-        shell: pwsh
-        run: |
-          $ref = "${{ github.event.inputs.rustdesk_ref }}"
-          if ([string]::IsNullOrWhiteSpace($ref)) {
-            $ref = "master"
-          }
-          "value=$ref" >> $env:GITHUB_OUTPUT
-
       - name: Checkout RustDesk source
         uses: actions/checkout@v4
         with:
           repository: rustdesk/rustdesk
-          ref: ${{ steps.ref.outputs.value }}
+          ref: ${{ needs.resolve-rustdesk-ref.outputs.ref }}
           path: rustdesk
           submodules: recursive
+
+      - name: Restore generated bridge files
+        uses: actions/download-artifact@v4
+        with:
+          name: rustdesk-bridge-${{ needs.resolve-rustdesk-ref.outputs.artifact_suffix }}
+          path: rustdesk
+
+      - name: Verify generated bridge files
+        shell: pwsh
+        working-directory: rustdesk
+        run: |
+          $requiredFiles = @(
+            'src\bridge_generated.rs',
+            'src\bridge_generated.io.rs',
+            'flutter\lib\generated_bridge.dart',
+            'flutter\lib\generated_bridge.freezed.dart'
+          )
+          $missingFiles = $requiredFiles | Where-Object { -not (Test-Path $_) }
+          if ($missingFiles) {
+            throw "Missing generated Flutter Rust Bridge files: $($missingFiles -join ', ')"
+          }
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@v1
@@ -194,6 +304,22 @@ jobs:
           Expand-Archive -Path windows-x64-release.zip -DestinationPath windows-x64-release
           Copy-Item windows-x64-release\* $engineRoot -Recurse -Force
 
+      - name: Apply required Flutter patch
+        shell: pwsh
+        run: |
+          $patch = Join-Path $env:GITHUB_WORKSPACE 'rustdesk\.github\patches\flutter_3.24.4_dropdown_menu_enableFilter.diff'
+          if (Test-Path $patch) {
+            $flutterRoot = $env:FLUTTER_ROOT
+            if ([string]::IsNullOrWhiteSpace($flutterRoot)) {
+              $flutterCommand = Get-Command flutter -ErrorAction Stop
+              $flutterRoot = Split-Path -Parent (Split-Path -Parent $flutterCommand.Source)
+            }
+            git -C $flutterRoot apply --check $patch
+            git -C $flutterRoot apply $patch
+          } else {
+            Write-Warning "RustDesk ref does not provide the Flutter 3.24.5 patch; continuing without it."
+          }
+
       - name: Show tool versions
         shell: pwsh
         run: |
@@ -254,7 +380,7 @@ jobs:
       - name: Create distributable zip
         shell: pwsh
         run: |
-          $bundleName = "rustdesk-windows-${{ steps.ref.outputs.value }}-bundle.zip"
+          $bundleName = "rustdesk-windows-${{ needs.resolve-rustdesk-ref.outputs.artifact_suffix }}-bundle.zip"
           if (Test-Path $bundleName) {
             Remove-Item $bundleName -Force
           }
@@ -263,19 +389,19 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: rustdesk-windows-${{ steps.ref.outputs.value }}
+          name: rustdesk-windows-${{ needs.resolve-rustdesk-ref.outputs.artifact_suffix }}
           path: |
             dist
-            rustdesk-windows-${{ steps.ref.outputs.value }}-bundle.zip
+            rustdesk-windows-${{ needs.resolve-rustdesk-ref.outputs.artifact_suffix }}-bundle.zip
 
       - name: Create Release
         if: ${{ github.event.inputs.upload_release == 'true' }}
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: rustdesk-${{ steps.ref.outputs.value }}
-          name: RustDesk ${{ steps.ref.outputs.value }}
+          tag_name: rustdesk-${{ needs.resolve-rustdesk-ref.outputs.ref }}
+          name: RustDesk ${{ needs.resolve-rustdesk-ref.outputs.ref }}
           files: |
             dist/**/*
-            rustdesk-windows-${{ steps.ref.outputs.value }}-bundle.zip
+            rustdesk-windows-${{ needs.resolve-rustdesk-ref.outputs.artifact_suffix }}-bundle.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
