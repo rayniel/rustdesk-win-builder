@@ -390,7 +390,7 @@ jobs:
       - name: Create distributable zip
         shell: pwsh
         run: |
-          $bundleName = "rustdesk-windows-${{ needs.resolve-rustdesk-ref.outputs.artifact_suffix }}-bundle.zip"
+          $bundleName = "rustdesk-windows-x64-${{ needs.resolve-rustdesk-ref.outputs.artifact_suffix }}-bundle.zip"
           if (Test-Path $bundleName) {
             Remove-Item $bundleName -Force
           }
@@ -399,19 +399,19 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: rustdesk-windows-${{ needs.resolve-rustdesk-ref.outputs.artifact_suffix }}
+          name: rustdesk-windows-x64-${{ needs.resolve-rustdesk-ref.outputs.artifact_suffix }}
           path: |
             dist
-            rustdesk-windows-${{ needs.resolve-rustdesk-ref.outputs.artifact_suffix }}-bundle.zip
+            rustdesk-windows-x64-${{ needs.resolve-rustdesk-ref.outputs.artifact_suffix }}-bundle.zip
 
       - name: Create Release
         if: ${{ github.event.inputs.upload_release == 'true' }}
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: rustdesk-${{ needs.resolve-rustdesk-ref.outputs.ref }}
-          name: RustDesk ${{ needs.resolve-rustdesk-ref.outputs.ref }}
+          tag_name: rustdesk-windows-x64-${{ needs.resolve-rustdesk-ref.outputs.ref }}
+          name: RustDesk Windows x64 ${{ needs.resolve-rustdesk-ref.outputs.ref }}
           files: |
             dist/**/*
-            rustdesk-windows-${{ needs.resolve-rustdesk-ref.outputs.artifact_suffix }}-bundle.zip
+            rustdesk-windows-x64-${{ needs.resolve-rustdesk-ref.outputs.artifact_suffix }}-bundle.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
