@@ -360,7 +360,7 @@ jobs:
           RUSTDESK_API: ${{ secrets.RUSTDESK_API }}
           RUSTDESK_KEY: ${{ secrets.RUSTDESK_KEY }}
         run: |
-          ..\scripts\resolve-selfhost-config.ps1
+          & (Join-Path $env:GITHUB_WORKSPACE 'scripts\resolve-selfhost-config.ps1')
 
       - name: Generate self-hosted deployment scripts
         if: ${{ steps.selfhost.outputs.enabled == 'true' }}
@@ -369,7 +369,7 @@ jobs:
           RUSTDESK_CONFIG: ${{ steps.selfhost.outputs.value }}
           RUSTDESK_CONFIG_SOURCE: ${{ steps.selfhost.outputs.source }}
         run: |
-          ..\scripts\generate-selfhost-package.ps1
+          & (Join-Path $env:GITHUB_WORKSPACE 'scripts\generate-selfhost-package.ps1')
 
       - name: Collect artifacts
         shell: pwsh
