@@ -198,7 +198,7 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
 
       - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@v1
+        uses: KyleMayes/install-llvm-action@v2.0.9
         with:
           version: ${{ env.LLVM_VERSION }}
 
