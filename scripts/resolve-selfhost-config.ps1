@@ -13,19 +13,19 @@ function Normalize-Value {
 $configString = ""
 $source = ""
 
-$host = Normalize-Value $env:RUSTDESK_HOST
+$serverHost = Normalize-Value $env:RUSTDESK_HOST
 $relay = Normalize-Value $env:RUSTDESK_RELAY
 $api = Normalize-Value $env:RUSTDESK_API
 $key = Normalize-Value $env:RUSTDESK_KEY
 $rawConfig = Normalize-Value $env:RUSTDESK_CONFIG
 
-if (-not [string]::IsNullOrWhiteSpace($host) -or -not [string]::IsNullOrWhiteSpace($key) -or -not [string]::IsNullOrWhiteSpace($relay) -or -not [string]::IsNullOrWhiteSpace($api)) {
-    if ([string]::IsNullOrWhiteSpace($host) -or [string]::IsNullOrWhiteSpace($key)) {
+if (-not [string]::IsNullOrWhiteSpace($serverHost) -or -not [string]::IsNullOrWhiteSpace($key) -or -not [string]::IsNullOrWhiteSpace($relay) -or -not [string]::IsNullOrWhiteSpace($api)) {
+    if ([string]::IsNullOrWhiteSpace($serverHost) -or [string]::IsNullOrWhiteSpace($key)) {
         throw "Self-host split secrets are incomplete. RUSTDESK_HOST and RUSTDESK_KEY are required when using split secrets."
     }
 
     $config = [ordered]@{
-        host = $host
+        host = $serverHost
         relay = $relay
         api = $api
         key = $key
