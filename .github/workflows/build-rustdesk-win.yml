@@ -369,6 +369,10 @@ jobs:
           RUSTDESK_CONFIG: ${{ steps.selfhost.outputs.value }}
           RUSTDESK_CONFIG_SOURCE: ${{ steps.selfhost.outputs.source }}
         run: |
+          if (-not (Get-Command makensis.exe -ErrorAction SilentlyContinue)) {
+            choco install nsis -y --no-progress
+          }
+          makensis.exe /VERSION
           & (Join-Path $env:GITHUB_WORKSPACE 'scripts\generate-selfhost-package.ps1')
 
       - name: Collect artifacts

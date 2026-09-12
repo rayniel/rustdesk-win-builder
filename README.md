@@ -43,6 +43,7 @@
 - `install-selfhosted.ps1`
 - `install-selfhosted.bat`
 - `selfhost-config-source.txt`
+- `rustdesk-*-selfhosted-setup.exe`（仅配置自建服务器 Secret 时生成；一键安装并自动导入服务器配置）
 
 同时还会额外生成一个可直接分发的压缩包:
 
@@ -52,6 +53,8 @@
 
 1. 静默安装构建出的 RustDesk 客户端
 2. 调用 `rustdesk.exe --config <config-string>` 导入你的自建服务器配置
+
+如果启用了 GitHub Release，`rustdesk-*-selfhosted-setup.exe` 会作为独立附件上传，可直接分发给终端用户。GitHub Actions Artifact 由平台统一以 ZIP 下载，需从 ZIP 中解压该 EXE 后运行。
 
 ## 说明
 
