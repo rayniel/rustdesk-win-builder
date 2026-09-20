@@ -79,6 +79,13 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: x86_64-unknown-linux-gnu
+          components: rustfmt
+
+      - name: Verify Rust formatter
+        shell: bash
+        run: |
+          rustup component add rustfmt --toolchain ${{ env.RUST_VERSION }}-x86_64-unknown-linux-gnu
+          rustfmt --version
 
       - name: Setup bridge Flutter
         uses: subosito/flutter-action@v2.23.0
